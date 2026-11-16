@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ImagePlus, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ImagePlus, Plus, X } from "lucide-react";
 import { Field, Input, Textarea, Button } from "./ui";
 import { MediaPicker } from "./MediaPicker";
 import { cldThumb } from "../lib/upload";
@@ -7,7 +7,7 @@ import { cldThumb } from "../lib/upload";
 export type FieldDef = {
   name: string;
   label: string;
-  type: "text" | "textarea" | "number" | "checkbox" | "date" | "tags" | "image" | "images" | "select" | "color" | "url" | "email";
+  type: "text" | "textarea" | "number" | "checkbox" | "date" | "tags" | "image" | "images" | "select" | "color" | "url" | "email" | "links";
   options?: readonly string[];
   hint?: string;
   rows?: number;
@@ -44,7 +44,7 @@ export function FormFields({
         const value = getPath(values, f.name);
         const set = (v: unknown) => onChange(setPath(values, f.name, v));
         const err = errors[f.name.split(".")[0]]?.[0];
-        const wide = f.full || ["textarea", "images", "tags", "image"].includes(f.type);
+        const wide = f.full || ["textarea", "images", "tags", "image", "links"].includes(f.type);
         return (
           <div key={f.name} className={wide ? "sm:col-span-2" : ""}>
             <Field label={f.label} error={err} hint={f.hint}>
@@ -91,6 +91,8 @@ function FieldInput({ def, value, set }: { def: FieldDef; value: unknown; set: (
       );
     case "tags":
       return <TagInput value={(value as string[]) ?? []} onChange={set} />;
+    case "links":
+      return <LinksInput value={(value as LinkRow[]) ?? []} onChange={set} />;
     case "image":
       return (
         <div className="flex items-center gap-3">
@@ -129,6 +131,45 @@ function FieldInput({ def, value, set }: { def: FieldDef; value: unknown; set: (
         />
       );
   }
+}
+
+type LinkRow = { label: string; url: string };
+
+/** Editable list of { label, url } — e.g. a project's repositories (Portfolio, CMS, API). */
+function LinksInput({ value, onChange }: { value: LinkRow[]; onChange: (v: LinkRow[]) => void }) {
+  const update = (i: number, patch: Partial<LinkRow>) => onChange(value.map((row, j) => (j === i ? { ...row, ...patch } : row)));
+  const move = (i: number, dir: -1 | 1) => {
+    const next = [...value];
+    const j = i + dir;
+    if (j < 0 || j >= next.length) return;
+    [next[i], next[j]] = [next[j], next[i]];
+    onChange(next);
+  };
+  return (
+    <div className="space-y-2">
+      {value.length === 0 && <p className="text-sm text-slate-500">No repositories yet.</p>}
+      {value.map((row, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <div className="flex flex-col">
+            <button type="button" className="text-slate-500 hover:text-white disabled:opacity-20" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move up">
+              <ArrowUp size={12} />
+            </button>
+            <button type="button" className="text-slate-500 hover:text-white disabled:opacity-20" disabled={i === value.length - 1} onClick={() => move(i, 1)} aria-label="Move down">
+              <ArrowDown size={12} />
+            </button>
+          </div>
+          <Input className="w-40 shrink-0" placeholder="Label, e.g. API" value={row.label} onChange={(e) => update(i, { label: e.target.value })} />
+          <Input type="url" placeholder="https://github.com/you/repo" value={row.url} onChange={(e) => update(i, { url: e.target.value })} />
+          <button type="button" onClick={() => onChange(value.filter((_, j) => j !== i))} className="rounded-full p-1 text-slate-400 hover:bg-rose-500/20 hover:text-rose-300" aria-label="Remove repository">
+            <X size={14} />
+          </button>
+        </div>
+      ))}
+      <Button type="button" variant="ghost" onClick={() => onChange([...value, { label: "", url: "" }])}>
+        <Plus size={14} /> Add repository
+      </Button>
+    </div>
+  );
 }
 
 function TagInput({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {

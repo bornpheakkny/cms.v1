@@ -36,7 +36,7 @@ export const Projects = () => (
     title="Projects"
     endpoint="/admin/projects"
     schema={projectSchema}
-    defaults={{ title: "", slug: "", summary: "", content: "", coverUrl: "", gallery: [], techStack: [], liveUrl: "", repoUrl: "", featured: false, published: false, order: 0 }}
+    defaults={{ title: "", slug: "", summary: "", content: "", coverUrl: "", gallery: [], techStack: [], liveUrl: "", repos: [], featured: false, published: false, order: 0 }}
     fields={[
       { name: "title", label: "Title", type: "text" },
       { name: "slug", label: "Slug", type: "text", hint: "used in the URL: /projects/my-slug" },
@@ -46,7 +46,7 @@ export const Projects = () => (
       { name: "gallery", label: "Gallery", type: "images" },
       { name: "techStack", label: "Tech stack", type: "tags" },
       { name: "liveUrl", label: "Live URL", type: "url" },
-      { name: "repoUrl", label: "Repository URL", type: "url" },
+      { name: "repos", label: "Repositories", type: "links", hint: "one project can have several, e.g. Portfolio, CMS and API" },
       { name: "featured", label: "Featured", type: "checkbox" },
       { name: "published", label: "Published", type: "checkbox" },
     ]}
@@ -57,6 +57,11 @@ export const Projects = () => (
           <p className="truncate font-medium text-white">{r.title as string}</p>
           <p className="truncate text-xs text-slate-500">/{r.slug as string}</p>
         </div>
+        {Array.isArray(r.repos) && r.repos.length > 0 ? (
+          <Badge>
+            {r.repos.length} repo{r.repos.length > 1 ? "s" : ""}
+          </Badge>
+        ) : null}
         {r.featured ? <Badge tone="amber">featured</Badge> : null}
         <Badge tone={r.published ? "green" : "slate"}>{r.published ? "published" : "draft"}</Badge>
       </div>
