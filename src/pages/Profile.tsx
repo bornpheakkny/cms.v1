@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
+import { Check } from "lucide-react";
 import { profileSchema, type Profile as P } from "../shared";
 import { ApiError, http } from "../lib/api";
-import { Button, Card, PageHeader } from "../components/ui";
+import { Button, Card, Notice, PageHeader } from "../components/ui";
 import { FormFields, type FieldDef } from "../components/fields";
 
 const fields: FieldDef[] = [
@@ -29,6 +30,7 @@ export function Profile() {
   const [values, setValues] = useState<Record<string, unknown>>(empty);
   const [errors, setErrors] = useState<Record<string, string[] | undefined>>({});
   const [saved, setSaved] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     if (data) setValues({ ...empty, ...data });
@@ -41,28 +43,41 @@ export function Profile() {
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     },
-    onError: (e) => e instanceof ApiError && e.details && setErrors(e.details),
+    onError: (e) => {
+      if (e instanceof ApiError && e.details) setErrors(e.details);
+      else setFormError((e as Error).message);
+    },
   });
 
   return (
     <>
-      <PageHeader title="Profile" subtitle="Your personal information — the sun at the center of your portfolio." />
-      <Card>
+      <PageHeader title="Profile" subtitle="Your personal information: the sun at the centre of your portfolio." />
+      <Card className="p-0">
         <form
-          className="space-y-5"
+          className="divide-y divide-line"
           onSubmit={(e) => {
             e.preventDefault();
             const { id: _i, updatedAt: _u, ...body } = values;
             const parsed = profileSchema.safeParse(body);
             if (!parsed.success) return setErrors(z.flattenError(parsed.error).fieldErrors as Record<string, string[]>);
             setErrors({});
+            setFormError(null);
             save.mutate(parsed.data);
           }}
         >
-          <FormFields fields={fields} values={values} errors={errors} onChange={setValues} />
-          <div className="flex items-center justify-end gap-3">
-            {saved && <span className="text-sm text-emerald-300">Saved ✓</span>}
-            <Button type="submit" disabled={save.isPending}>{save.isPending ? "Saving…" : "Save profile"}</Button>
+          <div className="space-y-5 p-6">
+            {formError && <Notice>{formError}</Notice>}
+            <FormFields fields={fields} values={values} errors={errors} onChange={setValues} />
+          </div>
+          <div className="flex items-center justify-end gap-3 rounded-b-xl bg-surface-2/60 px-6 py-4">
+            {saved && (
+              <span className="inline-flex items-center gap-1.5 text-sm text-success" role="status">
+                <Check size={15} /> Saved
+              </span>
+            )}
+            <Button type="submit" loading={save.isPending}>
+              {save.isPending ? "Saving…" : "Save profile"}
+            </Button>
           </div>
         </form>
       </Card>

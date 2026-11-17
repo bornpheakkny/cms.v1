@@ -1,10 +1,11 @@
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Inbox, Pencil, Plus, Trash2 } from "lucide-react";
 import type { ZodObject } from "zod";
 import { z } from "zod";
 import { ApiError, http } from "../lib/api";
-import { Button, Card, Modal, PageHeader } from "./ui";
+import { Button, Card, EmptyState, IconButton, Modal, Notice, PageHeader, Spinner } from "./ui";
+import { useConfirm } from "./confirm";
 import { FormFields, type FieldDef } from "./fields";
 
 type Row = { id: string } & Record<string, unknown>;
@@ -15,24 +16,31 @@ type Row = { id: string } & Record<string, unknown>;
  */
 export function ResourcePage({
   title,
+  singular,
   subtitle,
   endpoint,
   schema,
   fields,
   defaults,
   renderRow,
+  describe,
 }: {
   title: string;
+  singular: string;
   subtitle?: string;
   endpoint: string; // e.g. "/admin/projects"
   schema: ZodObject;
   fields: FieldDef[];
   defaults: Record<string, unknown>;
   renderRow: (row: Row) => ReactNode;
+  /** short name of a row, used in the delete confirmation */
+  describe: (row: Row) => string;
 }) {
   const qc = useQueryClient();
+  const confirm = useConfirm();
+  const formId = useId();
   const key = [endpoint];
-  const { data: rows = [], isLoading } = useQuery({ queryKey: key, queryFn: () => http.get<Row[]>(endpoint) });
+  const { data: rows = [], isLoading, error } = useQuery({ queryKey: key, queryFn: () => http.get<Row[]>(endpoint) });
 
   const [editing, setEditing] = useState<Row | null>(null);
   const [values, setValues] = useState<Record<string, unknown>>(defaults);
@@ -76,6 +84,16 @@ export function ResourcePage({
     reorder.mutate(ids);
   };
 
+  const askDelete = async (row: Row) => {
+    const ok = await confirm({
+      title: `Delete ${singular.toLowerCase()}?`,
+      message: `“${describe(row)}” will be removed from your portfolio. This can't be undone.`,
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (ok) remove.mutate(row.id);
+  };
+
   const submit = () => {
     // strip server-managed fields, then validate with the shared schema
     const { id: _id, createdAt: _c, updatedAt: _u, ...body } = values;
@@ -84,33 +102,73 @@ export function ResourcePage({
     save.mutate(parsed.data);
   };
 
+  const addButton = (
+    <Button onClick={() => openForm(null)}>
+      <Plus size={16} /> New {singular.toLowerCase()}
+    </Button>
+  );
+
   return (
     <>
-      <PageHeader title={title} subtitle={subtitle} action={<Button onClick={() => openForm(null)}><Plus size={16} /> New</Button>} />
-      <Card className="divide-y divide-space-700 p-0">
-        {isLoading && <p className="p-5 text-sm text-slate-500">Loading…</p>}
-        {!isLoading && rows.length === 0 && <p className="p-5 text-sm text-slate-500">Nothing here yet.</p>}
-        {rows.map((row, i) => (
-          <div key={row.id} className="flex items-center gap-3 px-5 py-3">
-            <div className="flex flex-col">
-              <button className="text-slate-500 hover:text-white disabled:opacity-20" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move up"><ArrowUp size={14} /></button>
-              <button className="text-slate-500 hover:text-white disabled:opacity-20" disabled={i === rows.length - 1} onClick={() => move(i, 1)} aria-label="Move down"><ArrowDown size={14} /></button>
-            </div>
-            <div className="min-w-0 flex-1">{renderRow(row)}</div>
-            <Button variant="ghost" onClick={() => openForm(row)}><Pencil size={14} /></Button>
-            <Button variant="danger" onClick={() => confirm("Delete this item?") && remove.mutate(row.id)}><Trash2 size={14} /></Button>
+      <PageHeader title={title} subtitle={subtitle} action={addButton} />
+
+      <Card className="overflow-hidden p-0">
+        {isLoading ? (
+          <Spinner />
+        ) : error ? (
+          <div className="p-5">
+            <Notice>{(error as Error).message}</Notice>
           </div>
-        ))}
+        ) : rows.length === 0 ? (
+          <EmptyState icon={Inbox} title={`No ${title.toLowerCase()} yet`} text={`Add your first ${singular.toLowerCase()} to show it on the portfolio.`} action={addButton} />
+        ) : (
+          <ul className="divide-y divide-line">
+            {rows.map((row, i) => (
+              <li key={row.id} className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-2 sm:px-5">
+                <div className="flex flex-col">
+                  <IconButton label="Move up" icon={ChevronUp} size="sm" className="h-5" disabled={i === 0 || reorder.isPending} onClick={() => move(i, -1)} />
+                  <IconButton label="Move down" icon={ChevronDown} size="sm" className="h-5" disabled={i === rows.length - 1 || reorder.isPending} onClick={() => move(i, 1)} />
+                </div>
+                <button type="button" className="min-w-0 flex-1 cursor-pointer text-left" onClick={() => openForm(row)}>
+                  {renderRow(row)}
+                </button>
+                <div className="flex items-center gap-1 sm:opacity-60 sm:transition-opacity sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                  <IconButton label={`Edit ${describe(row)}`} icon={Pencil} onClick={() => openForm(row)} />
+                  <IconButton label={`Delete ${describe(row)}`} icon={Trash2} tone="danger" onClick={() => askDelete(row)} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
 
-      <Modal open={open} onClose={() => setOpen(false)} title={editing ? `Edit ${title.replace(/s$/, "")}` : `New ${title.replace(/s$/, "")}`}>
-        <form onSubmit={(e) => { e.preventDefault(); submit(); }} className="space-y-5">
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title={editing ? `Edit ${singular.toLowerCase()}` : `New ${singular.toLowerCase()}`}
+        description={editing ? describe(editing) : undefined}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" form={formId} loading={save.isPending}>
+              {save.isPending ? "Saving…" : editing ? "Save changes" : `Create ${singular.toLowerCase()}`}
+            </Button>
+          </>
+        }
+      >
+        <form
+          id={formId}
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+          className="space-y-5"
+          noValidate
+        >
+          {errors._form && <Notice>{errors._form[0]}</Notice>}
           <FormFields fields={fields} values={values} errors={errors} onChange={setValues} />
-          {errors._form && <p className="text-sm text-rose-400">{errors._form[0]}</p>}
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={save.isPending}>{save.isPending ? "Saving…" : "Save"}</Button>
-          </div>
         </form>
       </Modal>
     </>

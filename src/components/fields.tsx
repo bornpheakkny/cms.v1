@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { ArrowDown, ArrowUp, ImagePlus, Plus, X } from "lucide-react";
-import { Field, Input, Textarea, Button } from "./ui";
+import { ChevronDown, ChevronUp, ImagePlus, Plus, Trash2, X } from "lucide-react";
+import { Button, Field, IconButton, Input, Select, Switch, Textarea, cx } from "./ui";
 import { MediaPicker } from "./MediaPicker";
 import { cldThumb } from "../lib/upload";
 
@@ -39,7 +39,7 @@ export function FormFields({
   onChange: (next: Values) => void;
 }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className="grid gap-x-4 gap-y-5 sm:grid-cols-2">
       {fields.map((f) => {
         const value = getPath(values, f.name);
         const set = (v: unknown) => onChange(setPath(values, f.name, v));
@@ -68,26 +68,33 @@ function FieldInput({ def, value, set }: { def: FieldDef; value: unknown; set: (
       return <Input type="date" value={toDateInput(value)} onChange={(e) => set(e.target.value || null)} />;
     case "checkbox":
       return (
-        <input type="checkbox" className="size-5 accent-indigo-500" checked={!!value} onChange={(e) => set(e.target.checked)} />
+        <div className="flex h-9 items-center gap-3">
+          <Switch checked={!!value} onChange={set} label={def.label} />
+          <span className="text-sm text-fg-muted">{value ? "On" : "Off"}</span>
+        </div>
       );
     case "color":
       return (
         <div className="flex gap-2">
-          <input type="color" className="h-9 w-12 rounded border border-space-600 bg-transparent" value={(value as string) || "#61dafb"} onChange={(e) => set(e.target.value)} />
-          <Input value={(value as string) ?? ""} onChange={(e) => set(e.target.value)} />
+          <label
+            className="relative size-9 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-line-strong transition-colors hover:border-fg-subtle"
+            style={{ background: (value as string) || "#61dafb" }}
+            title="Pick a color"
+          >
+            <input type="color" className="absolute inset-0 cursor-pointer opacity-0" value={(value as string) || "#61dafb"} onChange={(e) => set(e.target.value)} />
+          </label>
+          <Input className="font-mono" value={(value as string) ?? ""} onChange={(e) => set(e.target.value)} />
         </div>
       );
     case "select":
       return (
-        <select
-          className="w-full rounded-lg border border-space-600 bg-space-900 px-3 py-2 text-sm"
-          value={(value as string) ?? ""}
-          onChange={(e) => set(e.target.value)}
-        >
+        <Select value={(value as string) ?? ""} onChange={(e) => set(e.target.value)}>
           {def.options?.map((o) => (
-            <option key={o} value={o}>{o}</option>
+            <option key={o} value={o}>
+              {o}
+            </option>
           ))}
-        </select>
+        </Select>
       );
     case "tags":
       return <TagInput value={(value as string[]) ?? []} onChange={set} />;
@@ -95,15 +102,14 @@ function FieldInput({ def, value, set }: { def: FieldDef; value: unknown; set: (
       return <LinksInput value={(value as LinkRow[]) ?? []} onChange={set} />;
     case "image":
       return (
-        <div className="flex items-center gap-3">
-          {value ? (
-            <div className="relative">
-              <img src={cldThumb(value as string, 160)} className="size-20 rounded-lg object-cover" alt="" />
-              <button type="button" onClick={() => set("")} className="absolute -right-2 -top-2 rounded-full bg-rose-500 p-0.5 text-white"><X size={12} /></button>
-            </div>
-          ) : null}
-          <Button type="button" variant="ghost" onClick={() => setPicker(true)}><ImagePlus size={14} /> Choose</Button>
-          <Input placeholder="…or paste a URL" value={(value as string) ?? ""} onChange={(e) => set(e.target.value)} />
+        <div className="flex flex-wrap items-center gap-3 sm:flex-nowrap">
+          {value ? <Thumb url={value as string} onRemove={() => set("")} /> : <EmptyThumb onClick={() => setPicker(true)} />}
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <Button variant="secondary" size="sm" className="self-start" onClick={() => setPicker(true)}>
+              <ImagePlus size={14} /> {value ? "Replace" : "Choose image"}
+            </Button>
+            <Input placeholder="…or paste an image URL" value={(value as string) ?? ""} onChange={(e) => set(e.target.value)} />
+          </div>
           <MediaPicker open={picker} onClose={() => setPicker(false)} onPick={(m) => { set(m.url); setPicker(false); }} />
         </div>
       );
@@ -112,12 +118,9 @@ function FieldInput({ def, value, set }: { def: FieldDef; value: unknown; set: (
       return (
         <div className="flex flex-wrap items-center gap-3">
           {list.map((url, i) => (
-            <div key={url + i} className="relative">
-              <img src={cldThumb(url, 160)} className="size-20 rounded-lg object-cover" alt="" />
-              <button type="button" onClick={() => set(list.filter((_, j) => j !== i))} className="absolute -right-2 -top-2 rounded-full bg-rose-500 p-0.5 text-white"><X size={12} /></button>
-            </div>
+            <Thumb key={url + i} url={url} onRemove={() => set(list.filter((_, j) => j !== i))} />
           ))}
-          <Button type="button" variant="ghost" onClick={() => setPicker(true)}><ImagePlus size={14} /> Add</Button>
+          <EmptyThumb onClick={() => setPicker(true)} label="Add image" />
           <MediaPicker open={picker} onClose={() => setPicker(false)} onPick={(m) => { set([...list, m.url]); setPicker(false); }} />
         </div>
       );
@@ -147,25 +150,22 @@ function LinksInput({ value, onChange }: { value: LinkRow[]; onChange: (v: LinkR
   };
   return (
     <div className="space-y-2">
-      {value.length === 0 && <p className="text-sm text-slate-500">No repositories yet.</p>}
-      {value.map((row, i) => (
-        <div key={i} className="flex items-center gap-2">
-          <div className="flex flex-col">
-            <button type="button" className="text-slate-500 hover:text-white disabled:opacity-20" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move up">
-              <ArrowUp size={12} />
-            </button>
-            <button type="button" className="text-slate-500 hover:text-white disabled:opacity-20" disabled={i === value.length - 1} onClick={() => move(i, 1)} aria-label="Move down">
-              <ArrowDown size={12} />
-            </button>
-          </div>
-          <Input className="w-40 shrink-0" placeholder="Label, e.g. API" value={row.label} onChange={(e) => update(i, { label: e.target.value })} />
-          <Input type="url" placeholder="https://github.com/you/repo" value={row.url} onChange={(e) => update(i, { url: e.target.value })} />
-          <button type="button" onClick={() => onChange(value.filter((_, j) => j !== i))} className="rounded-full p-1 text-slate-400 hover:bg-rose-500/20 hover:text-rose-300" aria-label="Remove repository">
-            <X size={14} />
-          </button>
+      {value.length > 0 && (
+        <div className="divide-y divide-line rounded-lg border border-line bg-surface-2/50">
+          {value.map((row, i) => (
+            <div key={i} className="flex items-center gap-2 p-2">
+              <div className="flex flex-col">
+                <IconButton label="Move up" icon={ChevronUp} size="sm" className="h-4" disabled={i === 0} onClick={() => move(i, -1)} />
+                <IconButton label="Move down" icon={ChevronDown} size="sm" className="h-4" disabled={i === value.length - 1} onClick={() => move(i, 1)} />
+              </div>
+              <Input className="w-32 shrink-0 sm:w-40" placeholder="Label, e.g. API" value={row.label} onChange={(e) => update(i, { label: e.target.value })} />
+              <Input type="url" placeholder="https://github.com/you/repo" value={row.url} onChange={(e) => update(i, { url: e.target.value })} />
+              <IconButton label="Remove repository" icon={Trash2} tone="danger" onClick={() => onChange(value.filter((_, j) => j !== i))} />
+            </div>
+          ))}
         </div>
-      ))}
-      <Button type="button" variant="ghost" onClick={() => onChange([...value, { label: "", url: "" }])}>
+      )}
+      <Button variant="secondary" size="sm" onClick={() => onChange([...value, { label: "", url: "" }])}>
         <Plus size={14} /> Add repository
       </Button>
     </div>
@@ -180,16 +180,23 @@ function TagInput({ value, onChange }: { value: string[]; onChange: (v: string[]
     setDraft("");
   };
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-space-600 bg-space-900/80 p-2">
+    <div className="flex min-h-9 flex-wrap items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-2 py-1.5 transition-colors hover:border-line-strong focus-within:border-accent focus-within:ring-3 focus-within:ring-accent-soft">
       {value.map((t) => (
-        <span key={t} className="inline-flex items-center gap-1 rounded-full bg-indigo-500/20 px-2.5 py-1 text-xs text-indigo-200">
+        <span key={t} className="inline-flex items-center gap-1 rounded-md border border-line-strong bg-elevated py-0.5 pr-1 pl-2 text-xs text-fg">
           {t}
-          <button type="button" onClick={() => onChange(value.filter((x) => x !== t))}><X size={11} /></button>
+          <button
+            type="button"
+            aria-label={`Remove ${t}`}
+            className="rounded p-0.5 text-fg-subtle transition-colors hover:bg-danger-soft hover:text-danger"
+            onClick={() => onChange(value.filter((x) => x !== t))}
+          >
+            <X size={11} />
+          </button>
         </span>
       ))}
       <input
-        className="min-w-32 flex-1 bg-transparent px-1 text-sm outline-none"
-        placeholder="Type and press Enter"
+        className="h-6 min-w-32 flex-1 bg-transparent px-1 text-sm text-fg outline-none placeholder:text-fg-subtle focus-visible:outline-none"
+        placeholder={value.length ? "Add more…" : "Type and press Enter"}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {
@@ -201,5 +208,39 @@ function TagInput({ value, onChange }: { value: string[]; onChange: (v: string[]
         onBlur={add}
       />
     </div>
+  );
+}
+
+function Thumb({ url, onRemove }: { url: string; onRemove: () => void }) {
+  return (
+    <div className="group relative size-20 shrink-0 overflow-hidden rounded-lg border border-line bg-surface-2">
+      <img src={cldThumb(url, 160)} className="size-full object-cover" alt="" />
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label="Remove image"
+        className="absolute top-1 right-1 rounded-md bg-black/70 p-1 text-white opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 hover:bg-danger focus-visible:opacity-100"
+      >
+        <X size={12} />
+      </button>
+    </div>
+  );
+}
+
+function EmptyThumb({ onClick, label = "Choose image" }: { onClick: () => void; label?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className={cx(
+        "flex size-20 shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-line-strong text-fg-subtle transition-colors",
+        "hover:border-accent hover:bg-accent-soft hover:text-accent",
+      )}
+    >
+      <ImagePlus size={18} />
+      <span className="text-[10px] font-medium">{label === "Choose image" ? "Choose" : "Add"}</span>
+    </button>
   );
 }

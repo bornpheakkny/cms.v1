@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./lib/auth";
 import { Layout } from "./components/Layout";
+import { Spinner } from "./components/ui";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { Profile } from "./pages/Profile";
@@ -10,7 +11,7 @@ import { Messages } from "./pages/Messages";
 
 function Protected() {
   const { user, ready } = useAuth();
-  if (!ready) return <div className="flex h-full items-center justify-center text-slate-500">Loading…</div>;
+  if (!ready) return <Spinner />;
   return user ? <Layout /> : <Navigate to="/login" replace />;
 }
 

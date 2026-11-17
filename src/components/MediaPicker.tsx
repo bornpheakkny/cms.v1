@@ -1,10 +1,10 @@
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Upload } from "lucide-react";
+import { ImageOff, Upload } from "lucide-react";
 import type { Media } from "../shared";
 import { http } from "../lib/api";
 import { cldThumb, uploadToCloudinary } from "../lib/upload";
-import { Button, Modal } from "./ui";
+import { Button, EmptyState, Modal, Notice, Spinner } from "./ui";
 
 export function useUpload() {
   const qc = useQueryClient();
@@ -28,11 +28,19 @@ export function useUpload() {
   return { upload, busy, error };
 }
 
-export function UploadButton({ onUploaded, multiple }: { onUploaded: (m: Media[]) => void; multiple?: boolean }) {
+export function UploadButton({
+  onUploaded,
+  multiple,
+  variant = "primary",
+}: {
+  onUploaded: (m: Media[]) => void;
+  multiple?: boolean;
+  variant?: "primary" | "secondary";
+}) {
   const ref = useRef<HTMLInputElement>(null);
   const { upload, busy, error } = useUpload();
   return (
-    <>
+    <div className="flex flex-wrap items-center gap-3">
       <input
         ref={ref}
         type="file"
@@ -44,35 +52,58 @@ export function UploadButton({ onUploaded, multiple }: { onUploaded: (m: Media[]
           e.target.value = "";
         }}
       />
-      <Button type="button" variant="ghost" disabled={busy} onClick={() => ref.current?.click()}>
-        <Upload size={14} /> {busy ? "Uploading…" : "Upload"}
+      <Button variant={variant} loading={busy} onClick={() => ref.current?.click()}>
+        {!busy && <Upload size={15} />} {busy ? "Uploading…" : "Upload"}
       </Button>
-      {error && <span className="text-xs text-rose-400">{error}</span>}
-    </>
+      {error && <Notice>{error}</Notice>}
+    </div>
   );
 }
 
 export function MediaPicker({ open, onClose, onPick }: { open: boolean; onClose: () => void; onPick: (m: Media) => void }) {
-  const { data = [] } = useQuery({ queryKey: ["media"], queryFn: () => http.get<Media[]>("/admin/media"), enabled: open });
+  const { data = [], isLoading } = useQuery({ queryKey: ["media"], queryFn: () => http.get<Media[]>("/admin/media"), enabled: open });
+  const images = data.filter((m) => m.format !== "pdf");
+
   return (
-    <Modal open={open} onClose={onClose} title="Media library" wide>
-      <div className="mb-4 flex items-center gap-3">
-        <UploadButton multiple onUploaded={(m) => m[0] && onPick(m[0])} />
-        <span className="text-xs text-slate-500">Click an image to select it</span>
-      </div>
-      <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
-        {data.map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            onClick={() => onPick(m)}
-            className="group overflow-hidden rounded-lg border border-space-600 hover:border-indigo-400"
-          >
-            <img src={cldThumb(m.url)} alt={m.alt} className="aspect-square w-full object-cover transition group-hover:scale-105" />
-          </button>
-        ))}
-        {data.length === 0 && <p className="col-span-full text-sm text-slate-500">No media yet — upload something.</p>}
-      </div>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Media library"
+      description="Pick an image, or upload a new one."
+      size="lg"
+      footer={
+        <>
+          <div className="mr-auto">
+            <UploadButton variant="secondary" multiple onUploaded={(m) => m[0] && onPick(m[0])} />
+          </div>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+        </>
+      }
+    >
+      {isLoading ? (
+        <Spinner />
+      ) : images.length === 0 ? (
+        <EmptyState icon={ImageOff} title="No images yet" text="Upload an image and it will be selected automatically." />
+      ) : (
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5">
+          {images.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => onPick(m)}
+              title={m.alt || "Select image"}
+              className="group relative aspect-square overflow-hidden rounded-lg border border-line bg-surface-2 transition-colors hover:border-accent focus-visible:border-accent"
+            >
+              <img src={cldThumb(m.url)} alt={m.alt} className="size-full object-cover transition-transform duration-300 group-hover:scale-105" />
+              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 pt-6 pb-1.5 text-left text-[11px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                Select
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </Modal>
   );
 }

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
-import { Button, Card, Field, Input } from "../components/ui";
+import { Button, Field, Input, Notice } from "../components/ui";
 
 export function Login() {
   const { user, login } = useAuth();
@@ -14,14 +14,14 @@ export function Login() {
 
   return (
     <div className="flex min-h-full items-center justify-center p-6">
-      <Card className="w-full max-w-sm">
-        <div className="mb-6 text-center">
-          <img src="/favicon.svg" className="mx-auto mb-3 size-12" alt="" />
-          <h1 className="text-xl font-semibold text-white">Portfolio CMS</h1>
-          <p className="text-sm text-slate-400">Sign in to manage your universe</p>
+      <div className="w-full max-w-sm">
+        <div className="mb-8 text-center">
+          <img src="/favicon.svg" className="mx-auto mb-4 size-11" alt="" />
+          <h1 className="text-xl font-semibold tracking-tight text-fg">Sign in to Portfolio CMS</h1>
+          <p className="mt-1.5 text-sm text-fg-muted">Manage the content of your portfolio.</p>
         </div>
         <form
-          className="space-y-4"
+          className="space-y-5 rounded-xl border border-line bg-surface p-6 shadow-xl shadow-black/20"
           onSubmit={async (e) => {
             e.preventDefault();
             setBusy(true);
@@ -35,12 +35,18 @@ export function Login() {
             }
           }}
         >
-          <Field label="Email"><Input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></Field>
-          <Field label="Password"><Input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></Field>
-          {error && <p className="text-sm text-rose-400">{error}</p>}
-          <Button type="submit" className="w-full" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</Button>
+          {error && <Notice>{error}</Notice>}
+          <Field label="Email">
+            <Input type="email" autoComplete="email" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} required />
+          </Field>
+          <Field label="Password">
+            <Input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          </Field>
+          <Button type="submit" className="w-full" loading={busy}>
+            {busy ? "Signing in…" : "Sign in"}
+          </Button>
         </form>
-      </Card>
+      </div>
     </div>
   );
 }
